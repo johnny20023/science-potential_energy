@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>重力位能互動教學動畫</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px;
+    font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif;
+    background: #eef3f8; color: #223;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { text-align: center; margin: 0 0 6px; font-size: 28px; }
+  .sub { text-align: center; color: #567; margin-bottom: 28px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  a.card {
+    display: block; text-decoration: none; color: inherit;
+    background: #fff; border-radius: 14px; padding: 22px 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.12); transition: transform .15s, box-shadow .15s;
+  }
+  a.card:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,.16); }
+  .icon { font-size: 44px; }
+  .card h2 { margin: 8px 0 6px; font-size: 20px; }
+  .card p { margin: 0; color: #556; line-height: 1.6; font-size: 15px; }
+  .formula { margin-top: 28px; text-align: center; background: #fff7dc; border-left: 5px solid #f0b429;
+             border-radius: 8px; padding: 12px 16px; }
+  footer { margin-top: 24px; text-align: center; color: #889; font-size: 13px; }
+  @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>⚖️ 重力位能互動教學動畫</h1>
+  <div class="sub">國中自然科學・能量單元　讓學生親手改變條件，觀察影響位能的因素</div>
+
+  <div class="grid">
+    <a class="card" href="gravitational_potential_energy.html">
+      <div class="icon">🟥🟦</div>
+      <h2>位能比一比</h2>
+      <p>同時比較兩個物體，分別調整質量與高度，觀察位能大小與地面凹陷程度。</p>
+    </a>
+    <a class="card" href="newton_apple_potential_energy.html">
+      <div class="icon">🍎</div>
+      <h2>牛頓的蘋果</h2>
+      <p>改變蘋果質量與樹的高度，看看蘋果砸到牛頓時的衝擊有多大，並自動記錄與比較。</p>
+    </a>
+  </div>
+
+  <div class="formula">
+    <b>重力位能 U = m × g × h</b><br>
+    國中階段視重力加速度 g = 9.8 N/kg 為定值
+  </div>
+
+  <footer>純 HTML5 + JavaScript + Canvas，不需安裝，用瀏覽器即可開啟</footer>
+</div>
+</body>
+</html>

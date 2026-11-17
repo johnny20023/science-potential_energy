@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>牛頓的蘋果：重力位能實驗</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px;
+    font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif;
+    background: #eef3f8; color: #223;
+  }
+  h1 { margin: 0 0 4px; font-size: 24px; text-align: center; }
+  .sub { text-align: center; color: #567; margin-bottom: 12px; font-size: 14px; }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  canvas { width: 100%; height: auto; display: block; background: #fff; border-radius: 12px;
+           box-shadow: 0 2px 10px rgba(0,0,0,.12); }
+  .card { background: #fff; border-radius: 12px; padding: 12px 16px; margin-top: 12px;
+          box-shadow: 0 2px 8px rgba(0,0,0,.1); border-top: 6px solid #d93b2f; }
+  .card h2 { margin: 0 0 6px; font-size: 18px; }
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; }
+  .row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+  .row label { width: 120px; font-size: 15px; }
+  .row input[type=range] { flex: 1; }
+  .row .val { width: 66px; text-align: right; font-weight: bold; font-variant-numeric: tabular-nums; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; justify-content: center; }
+  button {
+    border: 0; border-radius: 8px; padding: 10px 18px; font-size: 16px; cursor: pointer;
+    background: #2e7d5b; color: #fff; font-family: inherit;
+  }
+  button.sec { background: #5b6b7d; }
+  button.pre { background: #8a63c8; font-size: 14px; padding: 9px 14px; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .result { margin-top: 12px; background: #fff; border-radius: 12px; padding: 14px 18px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.1); line-height: 1.7; }
+  .result .formula { font-size: 17px; font-variant-numeric: tabular-nums; }
+  .result .concl { margin-top: 6px; padding: 8px 12px; background: #fff7dc; border-left: 5px solid #f0b429; border-radius: 6px; }
+  .logwrap { margin-top: 12px; background: #fff; border-radius: 12px; padding: 12px 16px;
+             box-shadow: 0 2px 8px rgba(0,0,0,.1); }
+  .logwrap h2 { margin: 0 0 8px; font-size: 18px; display: flex; justify-content: space-between; align-items: center; }
+  .logwrap button { padding: 5px 12px; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 6px 8px; text-align: center; border-bottom: 1px solid #e3e9f0; }
+  th { background: #f2f6fa; }
+  .ebar { height: 14px; background: #f08a24; border-radius: 3px; min-width: 3px; }
+  .ebarcell { text-align: left; min-width: 160px; }
+  .empty { color: #889; text-align: center; padding: 10px; }
+  @media (max-width: 640px) { .controls { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🍎 牛頓的蘋果：重力位能實驗</h1>
+  <div class="sub">改變「蘋果質量」與「樹的高度」，按下「放手！」，看看蘋果砸到牛頓時，位能大小會有什麼不同</div>
+
+  <canvas id="cv" width="960" height="650"></canvas>
+
+  <div class="card">
+    <h2>🍎 調整實驗條件</h2>
+    <div class="controls">
+      <div class="row"><label for="mIn">蘋果質量 m</label><input type="range" id="mIn" min="0.1" max="2" step="0.1" value="0.5"><span class="val" id="mVal"></span></div>
+      <div class="row"><label for="hIn">樹高 h（蘋果距牛頓頭頂）</label><input type="range" id="hIn" min="1" max="10" step="0.5" value="4"><span class="val" id="hVal"></span></div>
+    </div>
+    <div class="buttons">
+      <button id="btnDrop">▶ 放手！</button>
+      <button id="btnReset" class="sec">↺ 重置蘋果</button>
+      <button class="pre" data-m="0.2" data-h="2">輕蘋果・矮樹</button>
+      <button class="pre" data-m="1.6" data-h="2">重蘋果・矮樹</button>
+      <button class="pre" data-m="0.2" data-h="9">輕蘋果・高樹</button>
+      <button class="pre" data-m="1.6" data-h="9">重蘋果・高樹</button>
+    </div>
+  </div>
+
+  <div class="result" id="result"></div>
+
+  <div class="logwrap">
+    <h2><span>📋 實驗紀錄（最近 6 次）</span><button id="btnClear" class="sec">清除紀錄</button></h2>
+    <table>
+      <thead><tr><th>次數</th><th>質量 m (kg)</th><th>高度 h (m)</th><th>位能 U (J)</th><th class="ebarcell">位能大小</th><th>牛頓的反應</th></tr></thead>
+      <tbody id="logBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ===== 常數 =====
+  const G = 9.8;                         // 重力加速度（國中階段視為定值）N/kg
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const GROUND = 590;
+  const PX = 36;                         // 每 1 公尺的像素
+  const HEAD_TOP = GROUND - 84;          // 牛頓頭頂（假髮頂端）y 座標，高度 h 以此為 0 m
+  const NX = 350;                        // 牛頓與蘋果的 x
+  const TX = 290;                        // 樹幹的 x
+  const MAX_E = 2 * G * 10;              // 最大位能 196 J
+  const SLOW = 0.6;                      // 慢動作倍率
+  const GRAV_PX = 900;                   // 彈跳時的視覺重力（像素）
+
+  const LVL_NAME = ['幾乎沒感覺', '有點痛', '好痛！', '痛到發昏'];
+  const LVL_SAY = ['咦？好像有東西碰到我…', '唉呦！有點痛！', '好痛啊！！', '痛痛痛…到底是什麼力把它往下拉？'];
+
+  const apple = { m: 0.5, h: 4 };
+  let mode = 'idle';                     // idle | falling | hit | done
+  let particles = [], rings = [];
+  let log = [];
+  let dropCount = 0;
+  let lastT = 0;
+
+  const $ = id => document.getElementById(id);
+  const mIn = $('mIn'), hIn = $('hIn');
+  const btnDrop = $('btnDrop'), btnReset = $('btnReset');
+  const fmt = n => (Math.round(n * 10) / 10).toString();
+  const fmt2 = n => (Math.round(n * 100) / 100).toString();
+  const appleR = m => 10 + m * 6;
+  const lvlOf = E => E < 15 ? 0 : E < 50 ? 1 : E < 110 ? 2 : 3;
+
+  // ===== 控制項 =====
+  function syncInputs() {
+    apple.m = parseFloat(mIn.value);
+    apple.h = parseFloat(hIn.value);
+    $('mVal').textContent = apple.m.toFixed(1) + ' kg';
+    $('hVal').textContent = apple.h + ' m';
+  }
+  function setLocked(lock) {
+    mIn.disabled = hIn.disabled = lock;
+    btnDrop.disabled = lock;
+    document.querySelectorAll('.pre').forEach(b => b.disabled = lock);
+  }
+  mIn.addEventListener('input', () => { syncInputs(); resetScene(); });
+  hIn.addEventListener('input', () => { syncInputs(); resetScene(); });
+  btnDrop.addEventListener('click', startDrop);
+  btnReset.addEventListener('click', resetScene);
+  $('btnClear').addEventListener('click', () => { log = []; dropCount = 0; renderLog(); resetScene(); });
+  document.querySelectorAll('.pre').forEach(b => b.addEventListener('click', () => {
+    mIn.value = b.dataset.m; hIn.value = b.dataset.h; syncInputs(); resetScene();
+  }));
+
+  // ===== 狀態 =====
+  function resetScene() {
+    mode = 'idle';
+    particles = []; rings = [];
+    Object.assign(apple, {
+      d: 0, v: 0, landed: false, rt: 0, ratio: 0, lvl: -1, E: 0,
+      ax: NX, ay: 0, vx: 0, vy: 0, grounded: false, rot: 0
+    });
+    setLocked(false);
+    updateResult();
+  }
+  function startDrop() {
+    if (mode === 'falling' || mode === 'hit') return;
+    resetScene();
+    mode = 'falling';
+    setLocked(true);
+  }
+
+  function onImpact() {
+    const r = appleR(apple.m);
+    const E = apple.m * G * apple.h;
+    apple.landed = true; apple.rt = 0; apple.E = E;
+    apple.ratio = E / MAX_E;
+    apple.lvl = lvlOf(E);
+    apple.ax = NX; apple.ay = HEAD_TOP - r;
+    apple.vx = 120 + 130 * apple.ratio;
+    apple.vy = -(100 + 260 * apple.ratio);
+    apple.grounded = false;
+    mode = 'hit';
+
+    rings.push({ t: 0, ratio: apple.ratio });
+    const n = Math.round(6 + 44 * apple.ratio);
+    for (let i = 0; i < n; i++) {
+      const a = Math.PI * (0.05 + 0.9 * Math.random());
+      const s = 60 + (40 + 260 * apple.ratio) * Math.random();
+      particles.push({
+        x: NX + (Math.random() - .5) * 24, y: HEAD_TOP,
+        vx: Math.cos(a) * s, vy: -Math.sin(a) * s, life: 1,
+        color: Math.random() < .5 ? '#ffd23f' : '#ffffff'
+      });
+    }
+
+    dropCount++;
+    log.push({ n: dropCount, m: apple.m, h: apple.h, U: E, lvl: apple.lvl });
+    if (log.length > 6) log.shift();
+    renderLog();
+    updateResult();
+  }
+
+  // ===== 更新 =====
+  function step(dt) {
+    if (mode === 'falling') {
+      apple.v += G * dt;
+      apple.d += apple.v * dt;
+      if (apple.d >= apple.h) {
+        apple.d = apple.h;
+        apple.v = Math.sqrt(2 * G * apple.h);
+        onImpact();
+      }
+    }
+    if (apple.landed) {
+      apple.rt += dt;
+      const r = appleR(apple.m);
+      apple.vy += GRAV_PX * dt;
+      apple.ax += apple.vx * dt;
+      apple.ay += apple.vy * dt;
+      apple.rot += apple.vx / r * dt;
+      if (apple.ay + r >= GROUND) {
+        apple.ay = GROUND - r;
+        if (Math.abs(apple.vy) > 50) { apple.vy = -apple.vy * 0.45; apple.grounded = false; }
+        else { apple.vy = 0; apple.grounded = true; }
+      }
+      if (apple.grounded) apple.vx *= Math.exp(-2.2 * dt);
+      if (mode === 'hit' && apple.rt > 2.2 && apple.grounded && Math.abs(apple.vx) < 25) {
+        mode = 'done';
+        setLocked(false);
+        updateResult();
+      }
+    }
+    rings.forEach(f => f.t += dt * 1.3);
+    rings = rings.filter(f => f.t < 1);
+    particles.forEach(p => {
+      p.vy += 700 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt * 0.9;
+    });
+    particles = particles.filter(p => p.life > 0 && p.y < GROUND + 4);
+  }
+
+  // ===== 繪圖輔助 =====
+  function rr(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  function circle(x, y, r, fill, stroke) {
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    drawBackground();
+    drawRuler();
+    drawTree();
+    drawNewton();
+    drawApple();
+    drawEffects();
+    drawBubble();
+    drawPanel();
+    drawGBox();
+  }
+
+  function drawBackground() {
+    const g = ctx.createLinearGradient(0, 0, 0, GROUND);
+    g.addColorStop(0, '#cfeaff'); g.addColorStop(1, '#f4fbff');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, GROUND);
+    // 太陽
+    circle(640, 100, 34, '#ffe27a', null);
+    // 地面
+    ctx.fillStyle = '#8b6b4a'; ctx.fillRect(0, GROUND, W, H - GROUND);
+    ctx.fillStyle = '#6c9a47'; ctx.fillRect(0, GROUND, W, 9);
+    ctx.fillStyle = '#fff'; ctx.font = '13px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('地面', 14, GROUND + 30);
+    ctx.fillText('高度 h 是從牛頓的頭頂算起（0 m）', 14, GROUND + 50);
+  }
+
+  function drawRuler() {
+    ctx.lineWidth = 1; ctx.font = '12px sans-serif'; ctx.textAlign = 'right';
+    for (let k = 0; k <= 10; k++) {
+      const y = HEAD_TOP - k * PX;
+      ctx.strokeStyle = '#8899aa'; ctx.fillStyle = '#556';
+      ctx.beginPath(); ctx.moveTo(60, y); ctx.lineTo(k % 5 === 0 ? 76 : 70, y); ctx.stroke();
+      ctx.fillText(k + ' m', 54, y + 4);
+      ctx.save(); ctx.strokeStyle = 'rgba(120,140,160,.16)';
+      ctx.beginPath(); ctx.moveTo(76, y); ctx.lineTo(680, y); ctx.stroke(); ctx.restore();
+    }
+    ctx.strokeStyle = '#8899aa'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(60, HEAD_TOP); ctx.lineTo(60, HEAD_TOP - 10 * PX); ctx.stroke();
+  }
+
+  function canopyCY() {
+    const r = appleR(apple.m);
+    return HEAD_TOP - apple.h * PX - 2 * r - 30;
+  }
+
+  function drawTree() {
+    const cy = canopyCY();
+    // 樹幹
+    ctx.fillStyle = '#7a5230';
+    ctx.fillRect(TX - 20, cy, 40, GROUND - cy);
+    ctx.beginPath();
+    ctx.moveTo(TX - 20, GROUND - 30); ctx.quadraticCurveTo(TX - 22, GROUND - 6, TX - 40, GROUND);
+    ctx.lineTo(TX + 40, GROUND); ctx.quadraticCurveTo(TX + 22, GROUND - 6, TX + 20, GROUND - 30);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 2;
+    for (let i = 0; i < 3; i++) {
+      const lx = TX - 10 + i * 10;
+      ctx.beginPath(); ctx.moveTo(lx, cy + 30); ctx.lineTo(lx + 2, GROUND - 40); ctx.stroke();
+    }
+    // 樹冠
+    const blobs = [[-95, 14, 46], [-45, -14, 56], [25, -20, 62], [88, 2, 52], [-10, 22, 48], [55, 24, 44]];
+    blobs.forEach(b => circle(TX + b[0], cy + b[1] + 6, b[2], '#2f7a35', null));
+    blobs.forEach(b => circle(TX + b[0], cy + b[1], b[2], '#3f9441', null));
+    blobs.forEach(b => circle(TX + b[0] - 10, cy + b[1] - 12, b[2] * 0.5, '#56ad4f', null));
+    // 樹上的其他小蘋果（裝飾）
+    [[-70, 8], [-20, -28], [40, -8], [100, 0], [-100, 30]].forEach(p => circle(TX + p[0], cy + p[1], 5, '#d93b2f', '#9c211a'));
+  }
+
+  function drawNewton() {
+    const ratio = apple.landed ? apple.ratio : 0;
+    const amp = apple.landed ? 0.25 + 0.75 * ratio : 0;
+    const sq = apple.landed ? amp * Math.exp(-3 * apple.rt) * Math.cos(16 * apple.rt) : 0;
+    const sx = 1 + 0.08 * sq, sy = 1 - 0.22 * sq;
+    const lvl = apple.landed ? apple.lvl : -1;
+
+    ctx.save();
+    ctx.translate(NX, GROUND); ctx.scale(sx, sy); ctx.translate(-NX, -GROUND);
+
+    // 腿（坐姿，向右伸直）
+    rr(NX + 4, GROUND - 17, 54, 14, 6); ctx.fillStyle = '#3b4a6b'; ctx.fill();
+    rr(NX + 54, GROUND - 16, 15, 14, 4); ctx.fillStyle = '#2a2a2a'; ctx.fill();
+    // 身體（長袍）
+    rr(NX - 21, HEAD_TOP + 38, 42, GROUND - HEAD_TOP - 38, 10); ctx.fillStyle = '#3b4a6b'; ctx.fill();
+    ctx.fillStyle = '#f5f1e6';
+    ctx.beginPath(); ctx.moveTo(NX - 6, HEAD_TOP + 38); ctx.lineTo(NX + 10, HEAD_TOP + 38); ctx.lineTo(NX + 2, HEAD_TOP + 56); ctx.closePath(); ctx.fill();
+    // 手臂
+    rr(NX + 2, HEAD_TOP + 50, 30, 10, 5); ctx.fillStyle = '#4c5d82'; ctx.fill();
+    circle(NX + 34, HEAD_TOP + 55, 5, '#f2c9a0', null);
+
+    // 假髮
+    const wig = '#f1ede6', wigS = '#c9c2b4';
+    circle(NX - 18, HEAD_TOP + 32, 10, wig, wigS);
+    circle(NX - 15, HEAD_TOP + 45, 9, wig, wigS);
+    circle(NX + 17, HEAD_TOP + 34, 8, wig, wigS);
+    circle(NX, HEAD_TOP + 19, 19, wig, wigS);
+    // 臉
+    circle(NX + 4, HEAD_TOP + 28, 11, '#f2c9a0', '#d6a67c');
+    circle(NX + 15, HEAD_TOP + 31, 2.8, '#eab48a', null);       // 鼻子
+
+    // 腫包（隨位能變大）
+    if (apple.landed && ratio > 0) {
+      const lr = 2 + 11 * Math.sqrt(ratio);
+      circle(NX + 3, HEAD_TOP + 3, lr, '#ff9f8f', '#d65f4f');
+      circle(NX + 3 - lr * 0.3, HEAD_TOP + 3 - lr * 0.3, lr * 0.28, 'rgba(255,255,255,.6)', null);
+    }
+
+    // 眼睛與嘴巴
+    const ex = NX + 9, ey = HEAD_TOP + 25, mx = NX + 9, my = HEAD_TOP + 35;
+    ctx.strokeStyle = '#222'; ctx.fillStyle = '#222'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    if (lvl <= 0) {
+      circle(ex, ey - (lvl < 0 ? 1.5 : 0), 2, '#222', null);
+      ctx.beginPath(); ctx.moveTo(mx - 3, my); ctx.lineTo(mx + 3, my); ctx.stroke();
+    } else if (lvl === 1) {
+      ctx.beginPath(); ctx.moveTo(ex - 4, ey - 3); ctx.lineTo(ex + 1, ey); ctx.lineTo(ex - 4, ey + 3); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(mx - 4, my + 2); ctx.quadraticCurveTo(mx, my - 2, mx + 4, my + 2); ctx.stroke();
+    } else if (lvl === 2) {
+      ctx.beginPath(); ctx.moveTo(ex - 4, ey - 3); ctx.lineTo(ex + 1, ey); ctx.lineTo(ex - 4, ey + 3); ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(mx, my + 1, 3, 4, 0, 0, Math.PI * 2); ctx.stroke();
+    } else {
+      ctx.beginPath(); ctx.moveTo(ex - 3, ey - 3); ctx.lineTo(ex + 3, ey + 3);
+      ctx.moveTo(ex + 3, ey - 3); ctx.lineTo(ex - 3, ey + 3); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(mx - 5, my + 1);
+      ctx.quadraticCurveTo(mx - 2, my - 3, mx, my + 1); ctx.quadraticCurveTo(mx + 2, my + 5, mx + 5, my + 1); ctx.stroke();
+    }
+    ctx.restore();
+
+    // 星星
+    if (apple.landed && apple.lvl >= 1 && apple.rt < 3.2) {
+      const n = 2 + apple.lvl;
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, (3.2 - apple.rt));
+      ctx.font = '16px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#f5b800';
+      for (let i = 0; i < n; i++) {
+        const a = apple.rt * 4 + i * Math.PI * 2 / n;
+        ctx.fillText('★', NX + Math.cos(a) * 30, HEAD_TOP - 8 + Math.sin(a) * 8);
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawApple() {
+    const r = appleR(apple.m);
+    let x, y;
+    if (apple.landed) { x = apple.ax; y = apple.ay; }
+    else { x = NX; y = HEAD_TOP - (apple.h - apple.d) * PX - r; }
+
+    // 高度標示（下落中）
+    if (!apple.landed) {
+      const by = y + r, lx = NX + 96;
+      ctx.save();
+      ctx.strokeStyle = '#a8332a'; ctx.fillStyle = '#a8332a'; ctx.lineWidth = 2;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(NX + r + 4, by); ctx.lineTo(lx, by); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(NX + 24, HEAD_TOP); ctx.lineTo(lx, HEAD_TOP); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(lx, by); ctx.lineTo(lx, HEAD_TOP); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(lx - 5, by + 7); ctx.lineTo(lx, by); ctx.lineTo(lx + 5, by + 7); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(lx - 5, HEAD_TOP - 7); ctx.lineTo(lx, HEAD_TOP); ctx.lineTo(lx + 5, HEAD_TOP - 7); ctx.stroke();
+      ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'left';
+      ctx.fillText('h = ' + fmt(Math.max(apple.h - apple.d, 0)) + ' m', lx + 8, (by + HEAD_TOP) / 2 + 5);
+      ctx.restore();
+    }
+
+    // 蘋果本體
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(apple.landed ? apple.rot : 0);
+    ctx.strokeStyle = '#6b4423'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(0, -r + 2); ctx.quadraticCurveTo(2, -r - 5, 5, -r - 8); ctx.stroke();
+    ctx.fillStyle = '#4caf50';
+    ctx.beginPath(); ctx.ellipse(r * 0.45, -r - 3, r * 0.4, r * 0.2, -0.4, 0, Math.PI * 2); ctx.fill();
+    circle(0, 0, r, '#d93b2f', '#9c211a');
+    ctx.fillStyle = 'rgba(255,255,255,.45)';
+    ctx.beginPath(); ctx.ellipse(-r * 0.38, -r * 0.4, r * 0.2, r * 0.32, -0.6, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    // 質量標示
+    ctx.fillStyle = '#7a1f17'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'left';
+    if (!apple.landed) ctx.fillText('m = ' + apple.m.toFixed(1) + ' kg', x + r + 8, y + 5);
+    else ctx.fillText('m = ' + apple.m.toFixed(1) + ' kg', x + r + 6, y - r - 4);
+  }
+
+  function drawEffects() {
+    rings.forEach(f => {
+      const rad = 14 + f.t * (50 + 120 * f.ratio);
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - f.t);
+      ctx.strokeStyle = '#ff7a3d'; ctx.lineWidth = 2 + 6 * f.ratio;
+      ctx.beginPath(); ctx.ellipse(NX, HEAD_TOP, rad, rad * 0.5, 0, Math.PI, 0); ctx.stroke();
+      ctx.restore();
+    });
+    particles.forEach(p => {
+      ctx.save(); ctx.globalAlpha = Math.max(0, p.life);
+      circle(p.x, p.y, 3, p.color, null);
+      ctx.restore();
+    });
+  }
+
+  function drawBubble() {
+    if (!apple.landed || apple.rt < 0.15) return;
+    const text = LVL_SAY[apple.lvl];
+    ctx.font = 'bold 15px sans-serif';
+    const tw = ctx.measureText(text).width;
+    const bx = NX + 40, by = HEAD_TOP - 62, bw = tw + 24, bh = 34;
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#556'; ctx.lineWidth = 2;
+    rr(bx, by, bw, bh, 12); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bx + 6, by + bh - 1); ctx.lineTo(bx - 8, by + bh + 16); ctx.lineTo(bx + 24, by + bh - 1);
+    ctx.fillStyle = '#fff'; ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.fillRect(bx + 8, by + bh - 3, 15, 4);
+    ctx.fillStyle = '#223'; ctx.textAlign = 'left'; ctx.fillText(text, bx + 12, by + 22);
+  }
+
+  function drawPanel() {
+    const px = 700, pw = 240;
+    ctx.fillStyle = '#f4f7fb'; ctx.strokeStyle = '#c7d2de'; ctx.lineWidth = 1;
+    ctx.fillRect(px, 20, pw, GROUND - 20); ctx.strokeRect(px, 20, pw, GROUND - 20);
+    ctx.fillStyle = '#223'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('蘋果的能量（單位：焦耳 J）', px + pw / 2, 44);
+    ctx.font = '12px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#2e9e6a'; ctx.fillRect(px + 20, 54, 12, 12); ctx.fillStyle = '#334'; ctx.fillText('重力位能', px + 36, 65);
+    ctx.fillStyle = '#f08a24'; ctx.fillRect(px + 110, 54, 12, 12); ctx.fillStyle = '#334'; ctx.fillText('動能（運動能量）', px + 126, 65);
+
+    const E = apple.m * G * apple.h;
+    const hNow = Math.max(apple.h - apple.d, 0);
+    const pe = apple.landed ? 0 : apple.m * G * hNow;
+    const ke = Math.max(E - pe, 0);
+    const base = GROUND - 30, scale = 380 / MAX_E;
+    const bx = px + 28, bw = 64;
+    const hpe = pe * scale, hke = ke * scale;
+    ctx.fillStyle = '#2e9e6a'; ctx.fillRect(bx, base - hpe, bw, hpe);
+    ctx.fillStyle = '#f08a24'; ctx.fillRect(bx, base - hpe - hke, bw, hke);
+    ctx.strokeStyle = '#a8332a'; ctx.lineWidth = 2; ctx.strokeRect(bx, base - hpe - hke, bw, hpe + hke);
+    ctx.strokeStyle = '#556';
+    ctx.beginPath(); ctx.moveTo(px + 16, base); ctx.lineTo(px + pw - 16, base); ctx.stroke();
+    ctx.fillStyle = '#a8332a'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('蘋果', bx + bw / 2, base + 20);
+
+    // 即時數值
+    const tx = px + 108;
+    const rows = [
+      ['目前高度 h', fmt(hNow) + ' m', '#a8332a'],
+      ['速度 v', fmt(apple.landed ? apple.v : apple.v) + ' m/s', '#334'],
+      ['重力位能', fmt2(pe) + ' J', '#1f7a50'],
+      ['動能', fmt2(ke) + ' J', '#c96a10']
+    ];
+    ctx.textAlign = 'left';
+    rows.forEach((r, i) => {
+      const y = 110 + i * 56;
+      ctx.fillStyle = '#667'; ctx.font = '12px sans-serif'; ctx.fillText(r[0], tx, y);
+      ctx.fillStyle = r[2]; ctx.font = 'bold 20px sans-serif'; ctx.fillText(r[1], tx, y + 24);
+    });
+    ctx.fillStyle = '#667'; ctx.font = '12px sans-serif';
+    ctx.fillText('位能 + 動能 = ' + fmt2(E) + ' J', tx - 10, 350);
+    ctx.fillText('（下落時位能轉成動能）', tx - 10, 368);
+  }
+
+  function drawGBox() {
+    const x = 455, y = 14, w = 225, h = 74;
+    ctx.fillStyle = 'rgba(255,248,214,.96)'; ctx.strokeStyle = '#e0b43a'; ctx.lineWidth = 2;
+    ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h);
+    ctx.fillStyle = '#5a4300'; ctx.textAlign = 'left';
+    ctx.font = 'bold 14px sans-serif'; ctx.fillText('重力加速度 g = 9.8 N/kg', x + 10, y + 22);
+    ctx.font = '13px sans-serif'; ctx.fillText('（國中階段視為定值）', x + 10, y + 42);
+    ctx.font = 'bold 15px sans-serif'; ctx.fillText('位能 U = m × g × h', x + 10, y + 63);
+  }
+
+  // ===== 說明文字與紀錄 =====
+  function updateResult() {
+    const m = apple.m, h = apple.h, U = m * G * h;
+    let html = `<div class="formula">🍎 蘋果的重力位能：U = m × g × h = ${m.toFixed(1)} × ${G} × ${h} = <b>${fmt2(U)} J</b></div>`;
+    let concl;
+    if (log.length >= 2 && (mode === 'hit' || mode === 'done')) {
+      const a = log[log.length - 2], b = log[log.length - 1];
+      const sameM = Math.abs(a.m - b.m) < 1e-9, sameH = Math.abs(a.h - b.h) < 1e-9;
+      const word = a.U === b.U ? '一樣大' : (b.U > a.U ? '變大了' : '變小了');
+      if (sameM && sameH) concl = '這次與上一次的條件完全相同，所以位能一樣大。';
+      else if (sameM) concl = `✔ 質量不變（${fmt(b.m)} kg），樹高從 ${a.h} m 改成 ${b.h} m，位能 ${fmt2(a.U)} J → ${fmt2(b.U)} J，<b>${word}</b>。<br>👉 結論：質量相同時，<b>高度越高，位能越大</b>。`;
+      else if (sameH) concl = `✔ 高度不變（${b.h} m），質量從 ${fmt(a.m)} kg 改成 ${fmt(b.m)} kg，位能 ${fmt2(a.U)} J → ${fmt2(b.U)} J，<b>${word}</b>。<br>👉 結論：高度相同時，<b>質量越大，位能越大</b>。`;
+      else concl = `這次質量與高度都改變了，位能 ${fmt2(a.U)} J → ${fmt2(b.U)} J，<b>${word}</b>。<br>👉 結論：位能大小同時取決於 <b>質量</b> 和 <b>高度</b>，要用 m × g × h 算算看。`;
+    } else if (mode === 'idle' || mode === 'falling') {
+      concl = '💡 試試看：每次只改變一個條件（質量或樹高），按「放手！」，再和上一次比較，看位能怎麼變。';
+    } else {
+      concl = '💡 現在請改變蘋果的質量或樹高，再放手一次，就可以和這一次比較了！';
+    }
+    if (apple.landed) {
+      concl += `<br>🔸 牛頓的反應：<b>${LVL_NAME[apple.lvl]}</b>。位能越大，蘋果落下時獲得的動能越大，砸到頭的衝擊就越大。`;
+    }
+    html += `<div class="concl">${concl}</div>`;
+    $('result').innerHTML = html;
+  }
+
+  function renderLog() {
+    const body = $('logBody');
+    if (!log.length) {
+      body.innerHTML = '<tr><td colspan="6" class="empty">還沒有紀錄，按「放手！」開始實驗</td></tr>';
+      return;
+    }
+    body.innerHTML = log.map(r => {
+      const w = Math.max(2, r.U / MAX_E * 100);
+      return `<tr><td>${r.n}</td><td>${r.m.toFixed(1)}</td><td>${r.h}</td><td><b>${fmt2(r.U)}</b></td>` +
+             `<td class="ebarcell"><div class="ebar" style="width:${w}%"></div></td><td>${LVL_NAME[r.lvl]}</td></tr>`;
+    }).join('');
+  }
+
+  // ===== 主迴圈 =====
+  function loop(t) {
+    const dt = Math.min((t - lastT) / 1000, 0.05) * SLOW;
+    lastT = t;
+    step(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  syncInputs();
+  renderLog();
+  resetScene();
+  requestAnimationFrame(t => { lastT = t; loop(t); });
+})();
+</script>
+</body>
+</html>
